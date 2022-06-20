@@ -1,0 +1,464 @@
+---
+title: <center>Mitochondrial DNA and Haplotype Networks</center>
+author: <center></center>
+date: <center>`r format(Sys.Date(),format="%B %d %Y")`</center>
+output: 
+    html_document:
+       css: Chapter.css
+       toc: yes
+       toc_depth: 5
+---
+
+```{r setup, include=F, echo=F}
+require("knitr")
+opts_knit$set(root.dir = "/Users/eric/Google Drive/CSUMB/BIO341L/GEOME")
+```
+
+
+```{r}
+library(knitr)
+library(rentrez)
+library(pegas)
+library(stringr)
+library(plyr)
+library(geomedb)
+library(strataG)
+
+# if the geomedb library won't load, try:
+# library(devtools)
+# install_github("biocodellc/fimsR-access")
+```
+
+
+##  Mitochondrial DNA and Haplotypes - A Special Case
+
+Organellar DNA has a rich history in population genetics.  In the late 1970's, John Avise, then starting his career, proposed that animal mitochondrial DNA has some unique properties that make it suitable for use in population genetic studies.  In particular
+
+1.  It is genetically haploid.
+2.  It does not recombine
+3.  It is uniparentally (usually maternally) inherited.
+4.  Experimental work (at the time involving restriction site analysis) showed it to be highly variable, probably due to a high mutation rate owing to the fact that mitochondria are an oxidizing environment.
+
+Fast forward to the present, and if you do a keyword search on "mitochondrial" in NCBI popset database it returns over 15,000 hits - in fact they far and away the most frequent class of sequence sets in that database.  Note, however, that they are by and large restricted to animals - in plants, chloroplast DNA has been used successfully for similar purposes, however its lower level of variation reduces its utility somewhat.
+
+While there is much we could say about the structure of mtDNA and its applicability to evolutionary questions, two features should be mentioned:
+
+1.  The *coi* gene, a relatively conserved sequence, has been widely employed as a "DNA Barcode" to identify samples at the species level.
+2.  The "D loop", the origin of replication, is a very A/T-rich region that is highly variable among individuals. This is because it is a non-coding sequence that is not under purifying selection. This is an excellent sequence to use for population structure studies.
+
+The intent here is to introduce mtDNA manipulation, so that you can consider it for further explorations.  We will start by showing how we can use it to construct a network of haplotypes and ask whether it reveals meaningful relations among individuals in a population.
+
+### An example with dogs
+
+The data we are going to look at are from popset [322367799](http://www.ncbi.nlm.nih.gov/popset/322367799), a collection of control region sequences from various dog breeds.
+
+```{r}
+dat.rnt <-entrez_search(db="popset",term="322367799")
+dat.raw <-entrez_fetch("popset",id=dat.rnt$ids,rettype="fasta")
+write(dat.raw,file="dog.fasta")
+dog.dat <-read.FASTA("dog.fasta")
+dog.dat
+```
+
+We need to edit the names of each sequence to something meaningful, in this case the breed.  We can use the following quick trick for this case (for others, another parsing method might have to be applied)
+
+```{r}
+nms <- names(dog.dat)
+nms<- sapply(nms, function(x) strsplit(x," ")[[1]][8])
+names(dog.dat) <- nms
+dog.dat
+
+#image.DNAbin(dog.dat)
+```
+
+
+We can't get an image of the data unless all sequences are of the same length. What is going on?
+
+As always, it is important to ensure that the sequences are aligned, which we will do with *muscle* (remember that the binary file must be accessible by R).
+
+```{r}
+dog.aln <-muscle(dog.dat)
+
+#or alternatively, read it in from here
+#dog.aln<-read.dna("https://ericcrandall.github.io/BIO444/Data/aligned_dogs.fasta",
+#format = "fasta", as.matrix=T)
+```
+
+And with that, we can visualize the alignment:
+
+```{r}
+image.DNAbin(dog.aln,cex.lab=.5)
+```
+
+We see that there is a huge gap in the middle of it.  Here's where one of the great advantages of the matrix format comes in - we can readily select the first 600 nucleotides, which are free of gaps, and use them for our subsequent analysis:
+
+```{r}
+dog.aln.sub <-dog.aln[,1:600]
+image.DNAbin(dog.aln.sub,cex.lab=.5)
+```
+
+And that looks better.  Note that the names of the sequences were edited prior to loading the data as well - full original designations can be found in the popset link.
+
+Now we are going to identify how many distinct mtDNA haploytpes are present in the sample:
+
+```{r}
+dog.hap <-haplotype(dog.aln.sub)
+dog.hap
+```
+
+So among the 17 sequences in the data set, there are 12 different haplotypes.  
+
+
+We can now visualize them in two ways.
+
+#### Visualization 1.  A Tree
+
+One of the most familiar ways to visualize relationships among aligned sequences is as a phylogenetic tree.  In this case, what we will do is to measure the number of nucleotide differences between pairs of breeds as a measure of their genetic divergence and use the resulting matrix to generate a neighbor-joining tree.  Note that for this we are treating all differences equally and are not taking the position of the differences into account.
+
+
+```{r}
+dog.dist <-dist.dna(dog.aln.sub) #calculate the distance matrix
+plot(nj(dog.dist),type="phylo",cex=.8) # plot a "neighbor joining" tree
+add.scale.bar(x= 0.005, y = 1, length = 0.0016)
+```
+
+
+The scale bar indicates the branch length associated with 1 mutational change between sequences (p = 1/600)
+
+But in fact, while useful, tree visualization like this is not entirely appropriate for population data, as it implies ancestor-descendant relationships that may or may not exist. In fact, we should be thinking of this as a network of haplotypes, which differ by one or more bases.  
+
+#### Visualization 2.  A Network
+
+Another way of thinking about this is asking, given two haplotypes, how many substitutions would be required to go from one to the other.  We would then extend that logic to create a network of all 12 haplotypes that requires the fewest steps.  The code is a bit tricky, but it and the results are shown below:
+
+```{r}
+net <-haploNet(dog.hap)
+fq <-attr(net,"freq")
+plot(net,size=fq,threshold=0,cex=.5)
+```
+
+The size of the circles indicate the number of sequences for each haplotype (for example, the smallest circles like X indicate a haplotype that occurred only once in the sample, while the largest on - II - actually had three).  Note also that breeds are not shown - to do so would be a graphical nightmare.  Instead, we can do a little bit of munging and generate a table that provides that information
+
+
+
+
+
+
+```{r}
+sample.no <-attr(dog.hap,"index")
+
+
+breed.by.haplo <-sapply(sample.no, function(x) rownames(dat.aln.sub)[x])
+sorted <-sapply(breed.by.haplo,paste,collapse=" ")
+haplo <-as.roman(1:12)
+kable(data.frame(Haplotype=as.character(haplo),Breed=sorted))
+```
+
+So looking at these results, we can't say that we've learned a lot about these dog breeds.  But after all, our sample size, both in terms of haplotypes and sequenced bases, is quite small.  Nevertheless, it illustrates the potential of the approach.  
+
+## GEOME Data
+
+Let' try this with GEOME data!
+
+Let's do some analysis on the ox-tongue Nerite snail *Nerita albicilla*. I've written a couple of papers on the population genetics of this snail. They are common algivores on coral reefs of the Indo-Pacific, and can typically be found at night on the underside of corals and boulders in shallow water. They can be identified by the little denticles on the inner lip of their shell.
+
+![*Nerita albiclla*](https://upload.wikimedia.org/wikipedia/commons/e/e2/Nerita_albicilla_01.jpg)
+
+
+### Metadata
+
+Let's download some metadata first. Metadata are data that describe other data. Here, the data are the genetic data and the metadata are data that describe each genetic sample: the taxonomy, the location sampled, the person who sampled it, the grant that payed for it, etc.
+
+Relational databases aim to store data using what is called [first normal form](https://en.wikipedia.org/wiki/First_normal_form). We won't go into the entire meaning of this, but one of its major goals is to reduce redundant information.
+
+If I visit a reef (lets say the island of Alam Kotok in Indonesia) and sample 20 *Nerita albicilla* from that reef, that is a sampling **event**. All of those 20 samples will have the same latitude, longitude, country, habitat, etc. So if I create a database of my samples, there is no need to repeat all this information for every single sample. Instead, it makes more sense to create one table that describes sampling **events**, and link it to a "daughter" table of **samples** that came from those events. 
+
+The link takes the form of a column of numbers (and/or letters) that uniquely identify each event. We will call this column the **eventID.** In the event table, the **eventID** is called the **primary key**. Now, instead of including all the event information (lat, long, country, etc.) when describing each sample, all I have to do is include a column in the **sample** table that is also called **eventID.** When it is found in the **sample** table, **eventID** is called a **foreign key**. If I use the **eventID** that I generated for Alam Kotok in the **Event** table, then all of the event metadata is effectively linked to each sample.
+
+```{r}
+# First, let's query the metadata for all the Nerita albicilla samples
+neralb_meta <- queryMetadata(entity = "Sample", 
+              query = "genus = Nerita AND specificEpithet = albicilla", 
+              select="Event")
+
+# There are two tables within the linckia_meta object
+names(neralb_meta)
+
+# one describes each sampling event (where, how, who)
+View(neralb_meta$Event)
+
+# the other describes each sample (what was sampled)
+View(neralb_meta$Sample)
+
+
+```
+
+If we view the number of events, we find it to be much smaller than the number of samples. This makes sense, since multiple samples are taken at each event.
+
+Let's rerun the query to just include *Nerita albicilla* from the Coral Triangle, an area of the Indo-Pacific that has the highest marine biodiversity on Earth, just like Amazonia is for terrestrial species. We will delimit it by decimalLongitude and decimalLatitude.
+
+![Coral Triangle](https://assets.weforum.org/editor/large_BesnNij0eiBaoDez-Vs-HgjkEVTlgKiLgnrSUtHJluw.jpg)
+
+
+```{r}
+neralb_CT_meta <- queryMetadata(entity = "Sample", 
+query = "genus = Nerita AND specificEpithet = albicilla AND 
+decimalLongitude:[ 91 TO 162] AND decimalLatitude:[-11 TO 17] AND
+_exists_:sequence", select = "Event")
+
+View(neralb_CT_meta$Sample)
+
+    View(neralb_CT_meta$Event)
+    
+    #subset the event metadata
+    event_info <- neralb_CT_meta$Event[,c("locality","country",
+                              "decimalLatitude","decimalLongitude","eventID")]
+    
+    
+    kable(event_info)
+
+
+```
+
+For simplicity's sake, let's do a little bit of lumping and clean up the locality names.
+
+```{r}
+
+
+
+#Lump all Malaysia populations into "Sarawak" - the Borneo part of Malaysia
+neralb_CT_meta$Event$locality[which(neralb_CT_meta$Event$country == 
+                                      "Malaysia")] <- "Sarawak"
+
+# Change USA to Guam
+neralb_CT_meta$Event$country[which(neralb_CT_meta$Event$country == 
+                                     "USA")] <- "Guam"
+
+#lump all Mindoro populations together
+neralb_CT_meta$Event$locality[grep("Mindoro",
+                                   neralb_CT_meta$Event$locality)]<-"Mindoro"
+
+#lump all Bohol populations together
+neralb_CT_meta$Event$locality[grep("Bohol",
+                                   neralb_CT_meta$Event$locality)]<-"Bohol"
+
+#remove commas from locality names
+neralb_CT_meta$Event$locality <- str_replace_all(neralb_CT_meta$Event$locality,
+                                                 ",","")
+
+#remove spaces from locality and country names
+neralb_CT_meta$Event$locality<-str_replace_all(neralb_CT_meta$Event$locality,
+                                               " " ,"_")
+neralb_CT_meta$Event$country<-str_replace_all(neralb_CT_meta$Event$country,
+                                              " " ,"_")
+
+#lump the western Thai populations into "Andaman Sea"
+neralb_CT_meta$Event$locality[which(as.numeric(neralb_CT_meta$Event$decimalLongitude) < 100)] <- "Andaman Sea"
+
+event_info <- neralb_CT_meta$Event[,c("locality","country",
+                                      "decimalLatitude","decimalLongitude",
+                                      "eventID")]
+
+```
+
+### Genetic Data
+
+Ok, so now it's time to download the genetic data. There are genetic data from several different genes on the mitochondrial genome in GEOME. We are going to download the data from the Cytochrome Oxidase subunit 1 gene, or CO1. This is a gene that is involved in the electron transport chain, so parts of it don't change much between different species (since all eukaryotic species respire). However, it changes just enough over evolutionarly time that we can often tell the difference between different species. 
+
+Because of this, CO1 has become the "universal" barcoding gene. Because most organisms shed tissue all over the place (you are shedding skin cells as you read this) we can sample DNA floating around in the ocean, or in the soil (environmental DNA or eDNA) and find out what lives there. Cool! But I digress.
+
+```{r}
+
+#lets see what genetic loci are available in GEOME
+listMarkers()
+
+#now we just repeat our query, but download FASTA data instead of the metadata
+neralb_CT_CO1 <- queryFasta(query = 
+"genus = Nerita AND specificEpithet = albicilla AND
+decimalLongitude:[ 91 TO 162] AND
+decimalLatitude:[-11 TO 17] AND _exists_:sequence", marker = "CO1")
+
+neralb_CT_CO1
+
+# Hmmm...we got a few more sequences here than what we have metadata for. Let's do some regular expression kung fu to pull out just the sample names from the fasta file, and overwrite the names with these shorter values.
+
+names(neralb_CT_CO1) <- str_replace(string=names(neralb_CT_CO1),
+                                    pattern=".+\\[tissueID = (.+?)\\].+", 
+                                    replacement = "\\1")
+
+#missing_metadata<-setdiff(names(neralb_CT_CO1), #neralb_CT_meta$Sample$materialSampleID)
+
+#lets just keep the sequences which we have data for
+#neralb_CT_CO1 <- neralb_CT_CO1[which(names(neralb_CT_CO1) %in% neralb_CT_meta$Sample$materialSampleID)]
+
+# and convert it to a matrix
+neralb_CT_CO1 <- as.matrix(neralb_CT_CO1)
+
+image.DNAbin(neralb_CT_CO1)
+```
+
+Ooh, all kinds of good variation in there!
+
+```{r}
+
+image.DNAbin(neralb_CT_CO1[1:20,350:400])
+
+```
+
+### Merging Metadata with Genetic Data
+
+Storing data in first normal form is all fine and good, but we need to find out what locality each of these individuals was sampled at. So we need to make a non-efficient "flat" table where we **join** the two tables together. We can use the **eventID** key that is common to both tables to do so. Whenever R encounters a particular **eventID** in the Sample table, it will look up the associated information in the Event table and add it to that line of the sample table. We do a left join, so that it will add event information to every line of the Sample table (the Sample table is on the left in the command below).
+
+```{r}
+
+neralb_flat <- join(neralb_CT_meta$Sample, neralb_CT_meta$Event, by = "eventID")
+
+```
+
+Now we want to make sure that the sequences are in the same order as the metadata. The `materialSampleID` field in the metadata should be the same as the `rowname` in the sequence file.
+
+```{r}
+
+head(neralb_flat$materialSampleID)
+
+head(rownames(neralb_CT_CO1))
+
+neralb_flat <- neralb_flat[order(neralb_flat$materialSampleID),]
+
+neralb_CT_CO1 <- neralb_CT_CO1[order(rownames(neralb_CT_CO1)),]
+
+
+```
+
+### Haplotype Network
+
+Just as we did with the dogs. A haplotype network shows the relationships between haplotypes (with edges or lines), and the frequency of haplotypes (with the size of each circle) in the dataset. Unlike a phylogeny, it does not try to depict ancestral relationships, but instead assumes that the ancestral sequence is one of the other haplotypes.
+
+```{r}
+
+# Let's make a list of populations that were sampled with the locality and country name
+pop <- paste(neralb_flat$country,neralb_flat$locality,sep="_")
+
+d <- dist.dna(neralb_CT_CO1)
+h <- pegas::haplotype(neralb_CT_CO1)
+h <- sort(h, what = "label")
+
+net <- pegas::haploNet(h)
+i<-stack(setNames(attr(h, "index"), rownames(h)))
+i<-i[order(i$values),]
+ind.hap<-table(hap=i$ind, pop=pop)
+
+#play with scale.ratio to get appropriate branch lengths
+plot(net,size=attr(net, "freq"), scale.ratio=2, pie=ind.hap,legend=F, labels=F,threshold=0, show.mutation=2, fast = T)
+
+#legend("topleft", colnames(ind.hap), col=rainbow(ncol(ind.hap)), 
+#pch=19, ncol=2)
+```
+
+
+If the resulting figure doesn't look good (and it probably won't) - try this program called [PopArt](http://popart.otago.ac.nz/index.shtml).
+
+#### Preparing for PopArt:
+
+1. Do the following in R
+
+```{r}
+hapseqs<-h[] # pull out the DNAbin object from the haplotype object
+#write this to nexus format
+write.nexus.data(hapseqs,"/Users/eric/Google Drive/CSUMB/BIO341L/GEOME/neralb_haplotypes.nex", interleaved=F)
+#write the haplotype table to csv
+write.csv(ind.hap,file="/Users/eric/Google Drive/CSUMB/BIO341L/GEOME/neralb_table.csv", quote=F)
+#write the flattened metadata too.
+write.csv(event_info,file="/Users/eric/Google Drive/CSUMB/BIO341L/GEOME/neralb_event_metadata.csv", quote=F)
+
+
+
+
+```
+
+2. Open the csv file in Excel. You may want to move the columns into geographical order of some kind.
+
+3. Modify the output csv file, removing the first comma on the first line. Also remove any commas from any population names.
+
+#### Using PopArt
+
+1. Download and open the program
+2. File --> Open --> Select your .nex file. Check that it imported correctly. You should see a matrix of DNA data.
+3. File --> Import --> Traits --> Select your modified .csv file. Do not clear the alignment data. On the next screen, verify that the data are being imported correctly (compare to the actual text file)
+4. Network --> Median Joining Network. It will compute a median joining network, which combines all possible [Minimum Spanning Trees](https://en.wikipedia.org/wiki/Minimum_spanning_tree)for the data, inferring missing haplotypes along the way.
+  a. Minimum Spanning Trees are networks that minimize the total distance of edges (lines) between nodes. If you were trying to connect a bunch of houses with electrical cable on a budget, you might select the minimum spanning network.
+5. File --> Save As.. save the nexus file with "_table" appended to the filename.
+6. Open this new file using Github Atom or another text editor. You'll notice that PopArt has added a traits block of code that includes the table that you imported. Add the following two space-delimited lines to this block, between the *Format* and the *TraitLabels* lines. When working with your own data, you will need to look up the lat and long data from your event metadata and add the values in the same order as the populations are listed in the TraitLabels line. Save the file.
+
+```{r, eval=F}
+TraitLatitude 13.48062 -5.69965 -5.963366667 -1.905283366 6.1 -6.41667 9.95 13.51667 1.36667 7.88333 9.5 -5.963366667;
+TraitLongitude 144.73698 106.5381167 105.8646167 105.8646167 116.08333 147.5 124.01667 120.96667 103.8 98.4 100 105.8646167;
+```
+
+7. Re-open the modified file in PopArt. In the network view, right-click on the "Thailand-Andaman_Sea" population and tell PopArt to color haplotypes from this population black. Note that most of the haplotypes in this population are in the smaller "Indian Ocean" clade.
+
+### Diversity Statistics
+
+#### Haplotypes and Haplotype Diversity
+```{r}
+neralb_g <- sequence2gtypes(neralb_CT_CO1,strata=pop)
+neralb_g <- labelHaplotypes(neralb_g)
+
+
+#num.alleles give you the number of haplotypes, and heterozygosity gives you haplotype diversity (i.e. heterozygosity for a haploid dataset) 
+
+neralb_g
+
+
+```
+
+#### Nucleotide Diversity
+
+For this we need the pegas package, and we need to write our own function, because the nuc.div() function doesn't stratify the data by population.
+
+```{r}
+library(pegas)
+
+rownames(neralb_CT_CO1)<-pop
+
+stratastat<-function(x,pop=pop,fun=nuc.div){
+  #this function will calculate stats for a DNAbin object (x), stratified across populations given in pop. 
+  # Some functions this will work with: nuc.div(), theta.s(), tajima.test() from pegas, FusFs(), exptdHet() from strataG,
+stats<-NULL
+for(p in unique(pop)){
+  stat<-fun(x[grep(p,rownames(x)),])
+  stats<-c(stats,stat)
+}
+
+
+names(stats)<-unique(pop)
+return(stats)
+}
+
+stratastat(neralb_CT_CO1,pop=pop,fun=nuc.div)
+
+
+
+```
+
+### Maps
+
+1. Download the CSV output from GeOMe. Place in your data folder.
+2. Edit in Excel to add info from Dongsha (Latitude: 20.698691	Longitude: 116.726274). Save as CSV.
+3. Make sure that the number of entries in the metadata file is equal to the number of sequences you have.
+
+```{r}
+library(ggmap)
+#pcoel_m<-read.csv("../Data/pcoel_metadata.csv")
+
+#find the midpoint of all sampled points
+samp_mean<-sapply(neralb_flat[,c("decimalLongitude","decimalLatitude")],mean)
+pmap <- get_map(location = samp_mean, maptype = "terrain", source = "google",zoom=3)
+
+pcoel_map<-ggmap(pmap) + geom_count(data = pcoel_m, mapping = aes(x = decimalLongitude, y = decimalLatitude), color="red") 
+
+pcoel_map
+
+```
+
+

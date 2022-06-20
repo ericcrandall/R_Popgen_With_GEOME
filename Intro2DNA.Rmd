@@ -1,0 +1,22 @@
+---
+title: <h1>Introduction to DNA Sequence Variation</h1>
+author: <center>Eric D. Crandall</center>
+date: <h2>`r format(Sys.Date(),format="%B %d %Y")`</h2>
+csl: ../genetics.csl.txt 
+output: 
+    html_document:
+       theme: paper
+       toc: yes
+       toc_depth: 5
+       code_folding: show
+---
+Parts of this lesson are based on materials from [Bruce Cochrane](http://www.teachingpopgen.org)
+```{r child="./Rmd/IntroDNA.Rmd"}
+
+```
+
+```{r child="./Rmd/MtDNA.Rmd"}
+
+```
+
+
