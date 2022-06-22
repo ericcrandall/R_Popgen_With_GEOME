@@ -1,9 +1,9 @@
 ---
-title: <h1>DNA Sequence Variation - Introduction</h1>
-date: <h2>`r format(Sys.Date(),format="%B %d %Y")`</h2>
-
-csl:  ../genetics.csl.txt
+title: "DNA Sequence Variation - Introduction"
 output:
+  pdf_document:
+    toc: yes
+    toc_depth: '5'
   html_document:
     code_fold: show
     css: ../Chapter.css
@@ -13,7 +13,7 @@ output:
 
 ```{r setup, include=F, echo=F}
 require("knitr")
-opts_knit$set(root.dir = "/Users/eric/Google Drive/CSUMB/BIO341L/GEOME")
+opts_knit$set(root.dir = "~/github/R_Popgen_With_GEOME/")
 ```
 
 
@@ -30,7 +30,7 @@ library(rentrez)
 library(ape)
 library(pegas)
 library(strataG)
-setwd("/Users/eric/Google Drive/CSUMB/BIO341L/GEOME")
+setwd("~/github/R_Popgen_With_GEOME/")
 ```
 
 ```{r}
@@ -137,7 +137,7 @@ Again, there is an R function (in the package pegas) that gets at this
 acp.div <-nuc.div(acp.mat)
 acp.div
 ```
-But this is an important point to note.  What we see here is the average diversity *per nucleotide*.  In other words, if we were to pick a random position from two random sequences, this would be the probability that they would be different bases.  We will use this occasionally, but for now, something that will be much more useful will be π, or the average number of differences *per sequence*.  We can get this simply by multiplying the diversity number by the length of the sequence (702 in this case).
+But this is an important point to note.  What we see here is the average diversity *per nucleotide*.  In other words, if we were to pick a random position from two random sequences, this would be the probability that they would be different bases.  We will use this occasionally, but for now, something that will be much more useful will be $\pi$, or the average number of differences *per sequence*.  We can get this simply by multiplying the diversity number by the length of the sequence (702 in this case).
 
 ```{r}
 acp.pi <-ncol(acp.mat)*acp.div

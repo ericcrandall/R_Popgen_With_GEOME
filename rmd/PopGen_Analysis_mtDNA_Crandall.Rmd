@@ -2,14 +2,14 @@
 title: "Population Genetic Analysis of Mitochondrial DNA"
 author: "Eric Crandall"
 output:
+  html_document:
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+    code_folding: show
   pdf_document:
     toc: yes
     toc_depth: 5
-  html_document:
-    css: Chapter.css
-    toc: yes
-    toc_depth: 5
-    code_folding: show
 csl: ../genetics.csl.txt
 ---
 
@@ -169,13 +169,13 @@ Where $x_i$ and $x_j$ are the respective frequencies of the ith and jth sequence
 Again, there is an R function (in the package pegas) that gets at this
 
 ```{r}
-dog.ndiv <-nuc.div(dog.aln.sub)
+dog.ndiv <- nuc.div(dog.aln.sub)
 dog.ndiv
 ```
 But this is an important point to note.  What we see here is the average diversity *per nucleotide*.  In other words, if we were to pick a random position from two random sequences, this would be the probability that they would be different bases.  We will use this occasionally, but for now, something that will be much more useful will be $\pi$, or the average number of differences *per sequence*.  We can get this simply by multiplying the diversity number by the length of the sequence (600 in this case).
 
 ```{r}
-dog.pi <-ncol(dog.aln.sub)*dog.ndiv
+dog.pi <- ncol(dog.aln.sub) * dog.ndiv
 dog.pi
 ```
 This number tells us the average number of differences between any two sequences.
@@ -198,7 +198,7 @@ Where $X_i$ is the relative haplotype frequency of each haplotype in the sample,
 
 ```{r}
 
-dog.hd<-hap.div(dog.aln.sub)
+dog.hd <- hap.div(dog.aln.sub)
 
 dog.hd
 
@@ -253,7 +253,7 @@ Let' try this with GEOME data!
 
 Let's do some analysis on the ox-tongue Nerite snail *Nerita albicilla*. I've written a couple of papers on the population genetics of this snail. They are common algivores on coral reefs of the Indo-Pacific, and can typically be found at night on the underside of corals and boulders in shallow water. They can be identified by the little denticles on the inner lip of their shell.
 
-![*Nerita albiclla*](/Users/eric/Google Drive/CSUMB/BIO341L/GEOME/Nerita_albicilla_01.jpg)
+![*Nerita albiclla*](../figures/Nerita_albicilla_01.jpg)
 
 
 ### Metadata
@@ -289,7 +289,7 @@ If we view the number of events, we find it to be much smaller than the number o
 
 Let's rerun the query to just include *Nerita albicilla* from the Coral Triangle, an area of the Indo-Pacific that has the highest marine biodiversity on Earth, just like Amazonia is for terrestrial species. We will delimit it by decimalLongitude and decimalLatitude.
 
-![Coral Triangle](/Users/eric/Google Drive/CSUMB/BIO341L/GEOME/CT.jpg)
+![Coral Triangle](../figures/CT.jpg)
 
 
 ```{r}
@@ -308,7 +308,7 @@ neralb_CT_meta <- queryMetadata(
 #View(neralb_CT_meta$Event)
     
     #subset the event metadata
-    event_info <- neralb_CT_meta$Event[,c("locality",                                         "country","decimalLatitude","decimalLongitude","eventID")]
+    event_info <- neralb_CT_meta$Event[,c("locality","country","decimalLatitude","decimalLongitude","eventID")]
     
     
     kable(event_info)
@@ -319,12 +319,16 @@ neralb_CT_meta <- queryMetadata(
 For simplicity's sake, let's do a little bit of lumping and clean up the locality names.
 
 ```{r}
+# delete the one sample from Vanuatu
+neralb_CT_meta$Sample <- neralb_CT_meta$Sample%>% filter(!materialSampleID == "268.01")
 
 #Lump all Malaysia populations into "Sarawak" - the Borneo part of Malaysia
-neralb_CT_meta$Event$locality[which(neralb_CT_meta$Event$country == "Malaysia")] <- "Sarawak"
+neralb_CT_meta$Event$locality[which(neralb_CT_meta$Event$country == 
+                                      "Malaysia")] <- "Sarawak"
 
 # Change USA to Guam
-neralb_CT_meta$Event$country[which(neralb_CT_meta$Event$country == "USA")] <- "Guam"
+neralb_CT_meta$Event$country[which(neralb_CT_meta$Event$country == 
+                                     "USA")] <- "Guam"
 
 #lump all Mindoro populations together
 neralb_CT_meta$Event$locality[grep("Mindoro",neralb_CT_meta$Event$locality)]<-"Mindoro"
@@ -333,11 +337,14 @@ neralb_CT_meta$Event$locality[grep("Mindoro",neralb_CT_meta$Event$locality)]<-"M
 neralb_CT_meta$Event$locality[grep("Bohol",neralb_CT_meta$Event$locality)]<-"Bohol"
 
 #remove commas from locality names
-neralb_CT_meta$Event$locality<-str_replace_all(neralb_CT_meta$Event$locality,",","")
+neralb_CT_meta$Event$locality <- str_replace_all(neralb_CT_meta$Event$locality,
+                                               ",","")
 
 #remove spaces from locality and country names
-neralb_CT_meta$Event$locality<-str_replace_all(neralb_CT_meta$Event$locality," " ,"_")
-neralb_CT_meta$Event$country<-str_replace_all(neralb_CT_meta$Event$country," " ,"_")
+neralb_CT_meta$Event$locality<-str_replace_all(neralb_CT_meta$Event$locality,
+                                               " " ,"_")
+neralb_CT_meta$Event$country<-str_replace_all(neralb_CT_meta$Event$country,
+                                              " " ,"_")
 
 #lump the western Thai populations into "Andaman Sea"
 neralb_CT_meta$Event$locality[
@@ -345,7 +352,8 @@ neralb_CT_meta$Event$locality[
   ] <- "Andaman Sea"
 
 event_info <- neralb_CT_meta$Event[,c("locality","country",
-                                      "decimalLatitude","decimalLongitude","eventID")]
+                                      "decimalLatitude","decimalLongitude",
+                                      "eventID")]
 
 ```
 
@@ -382,8 +390,8 @@ names(neralb_CT_CO1) <- str_replace(string=names(neralb_CT_CO1),
 #missing_metadata<-setdiff(names(neralb_CT_CO1), #neralb_CT_meta$Sample$materialSampleID)
 
 #lets just keep the sequences which we have data for
-#neralb_CT_CO1 <- neralb_CT_CO1[which(names(neralb_CT_CO1) %in% 
-# neralb_CT_meta$Sample$materialSampleID)]
+neralb_CT_CO1 <- neralb_CT_CO1[which(names(neralb_CT_CO1) %in% 
+                                    neralb_CT_meta$Sample$materialSampleID)]
 
 ```
 
@@ -411,7 +419,7 @@ Storing data in first normal form is all fine and good, but we need to find out 
 
 ```{r}
 
-neralb_flat <- join(neralb_CT_meta$Sample, neralb_CT_meta$Event, by = "eventID")
+neralb_flat <- left_join(neralb_CT_meta$Sample, neralb_CT_meta$Event, by = "eventID")
 
 ```
 
@@ -447,20 +455,20 @@ h <- sort(h, what = "label")
 net <- pegas::haploNet(h)
 
 #Funky code to make a table of which haplotypes occur in which populations
-i<-stack(setNames(attr(h, "index"), rownames(h)))
-i<-i[order(i$values),]
-ind.hap<-table(hap=i$ind, pop=pop)
+i <- stack(setNames(attr(h, "index"), rownames(h)))
+i <- i[order(i$values),]
+ind.hap <- table(hap=i$ind, pop=pop)
 
 # Let's make a second, simpler, table that 
 #just distinguishes Indian Ocean vs. Pacific Ocean populations
-pop2<-pop
+pop2 <- pop
 
 #Change all entries with "Thailand_Andaman Sea" to "Indian Ocean"
 pop2[which(pop2=="Thailand_Andaman Sea")] <- "Indian Ocean"
 # Change all others to "Pacific Ocean"
 pop2[which(pop2!="Indian Ocean")] <- "Pacific Ocean"
 #make the table
-ind.hap2<-table(hap=i$ind, pop=pop2)
+ind.hap2 <- table(hap=i$ind, pop=pop2)
 
 
 #play with scale.ratio to get appropriate branch lengths
@@ -527,7 +535,7 @@ TraitLongitude 144.73698 106.5381167 105.8646167 105.8646167 116.08333
 
 7. Re-open the modified file in PopArt. In the network view, in the key, right-click on the "Indian Ocean" population and tell PopArt to color haplotypes from this population black. Right-click on the "Pacific Ocean" and color haplotypes from this population white.
 
-![Haplotype Network](/Users/eric/Google Drive/CSUMB/BIO341L/GEOME/neralb_MJN_IP.png)
+![Haplotype Network](../figures/neralb_MJN_IP.png)
 
 
 ### Diversity Statistics
@@ -536,9 +544,16 @@ We now need to generate some statistics that tell us how diverse our data are.
 
 #### Haplotypes and Haplotype Diversity
 
-Diversity has two components. The first is richness, or how many different types are there... in this case haplotypes. The second is evenness, or how the different types are distributed. For example an all-Latinx school with 1 white person, one African-American and 1 Asian would be less even than, say, CSUMB.
+Diversity has two components. The first is richness, or how many different types are there... in this case haplotypes. The second is evenness, or how the different types are distributed. For example an all-white school with 1 Latinx person, one African-American and 1 Asian would be less even (and thus less diverse) than your current institutions, even if the richness was the same.
 
 If we drew two haplotypes at random from the population, haplotype diversity expresses the probability that they would be different haplotypes.
+
+Remember that: 
+
+$$h = \frac{N}{N-1}(1 - \sum_{i=1}^n X_i)$$
+
+
+Where $X_i$ is the relative haplotype frequency of each haplotype in the sample, and N is sample size. 
 
 For this we need the pegas package, and we need to write our own function, because the `hap.div()`and `nuc.div()` functions don't stratify the data by population.
 
@@ -549,7 +564,7 @@ neralb_CT_CO1_b <- neralb_CT_CO1
 
 rownames(neralb_CT_CO1_b)<-pop
 
-stratastat<-function(x,pop=pop,fun=nuc.div){
+stratastat <- function(x,pop=pop,fun=nuc.div){
   #this function will calculate stats for a DNAbin object
   #(x), stratified across populations given in pop. 
   # Some functions this will work with: nuc.div(),
@@ -561,41 +576,53 @@ for(p in unique(pop)){
 }
 
 
-names(stats)<-unique(pop)
+names(stats) <- unique(pop)
 return(stats)
 }
 
 #let's try it out
-hapdivs<-stratastat(neralb_CT_CO1_b,pop=pop,fun=hap.div)
+hapdivs <- stratastat(neralb_CT_CO1_b,pop=pop,fun=hap.div)
 
 hapdivs
 
 ```
 
 #### Nucleotide Diversity
+
+
+Remember that this is the average number of pairwise differences is between any two sequences.
+Recalling that:
+
+$$\pi =  \sum_{ij}x_ix_j\pi_{ij}$$
+Where $x_i$ and $x_j$ are the respective frequencies of the ith and jth sequences in the sample and $\pi_{ij}$ is the number of nucleotide differences between these two sequences.
+
+
+
 ```{r}
 nucdivs<-stratastat(neralb_CT_CO1_b,pop=pop,fun=nuc.div)
 nucdivs
 ```
 
-Here's some code to convert our data to be used by the StrataG package. We can use this to double-check the calculations that were done by Pegas.
+Here's some optional code to convert our data to be used by the StrataG package. We can use this to double-check the calculations that were done by Pegas.
 
 ```{r}
 neralb_g <- sequence2gtypes(neralb_CT_CO1,strata=pop)
 neralb_g <- labelHaplotypes(neralb_g)
-neralb_g
 
+samples<- numGenotyped(neralb_g, by.strata=T)
+# if strataG isn't working use this:
+# samples <- neralb_g@data %>% count(stratum)
 
-samples<- summary(neralb_g$gtypes)$strata.smry[,1]
-
-haplotypes <- summary(neralb_g$gtypes)$strata.smry[,3]
+haplotypes <- numAlleles(neralb_g, by.strata=T)
 ```
 
 Now let's make a table of our various summary statistics.
 
 ```{r}
-diversities<-cbind("# Samples" = samples,"# Haplotypes" = haplotypes, 
-                   "Nucleotide Diversity" = nucdivs,"Haplotype Diversity" = hapdivs)
+diversities<-cbind("# Samples" = samples$num.genotyped,
+                   "# Haplotypes" = haplotypes$num.alleles, 
+                   "Nucleotide Diversity" = nucdivs,
+                   "Haplotype Diversity" = hapdivs)
 
 kable(diversities, digits=3)
 ```
@@ -623,13 +650,13 @@ For our purposes now, we will first be calculating **pairwise** $\Phi_{ST}$. For
 The StrataG package is establishing significance of each pairwise value by randomly allocating each haplotype sequence in the pair of populations being compared into one of two bins, and measuring $\Phi_{ST}$ between them. This creates a distribution of $\Phi_{ST}$ values that would occur if there was no real structuring going on. If the true $\Phi_{ST}$ value is larger than 95% of values in this distribution, then it is deemed significantly greater than zero.
 
 ```{r}
-pairwise_phi<-pairwiseTest(neralb_g$gtypes,stats="phist",nrep=1000,quietly=T,model="raw")
+pairwise_phi <- pairwiseTest(neralb_g,nrep=1000,quietly=T,model="raw")
 
-
+pairwise_phi_mat <- pairwiseMatrix(pairwise_phi, stat = "PHIst")
 # PhiST in lower triangle, p-value in upper triangle
-kable(pairwise_phi$pair.mat$PHIst, digits=3)
+kable(pairwise_phi_mat, digits=3)
 
-phiST <- pairwise_phi$pair.mat$PHIst
+phiST <- pairwise_phi_mat
 phiST[upper.tri(phiST)] = t(phiST)[upper.tri(phiST)]
 
 heatmap(phiST)
